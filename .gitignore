@@ -1,0 +1,4 @@
+__pycache__
+*.pyc
+mcp_extract_progress.json
+/tmp/
