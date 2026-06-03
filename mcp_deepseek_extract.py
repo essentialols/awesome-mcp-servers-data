@@ -102,41 +102,50 @@ def main():
     remaining = [e for e in entries if e["name"] not in done_names]
     print(f"Total: {len(entries)}, remaining: {len(remaining)}")
 
-    # Open output file in append mode
-    out_f = open(OUTPUT, "a", encoding="utf-8")
+    # Open output file in append mode with proper resource management
+    try:
+        with open(OUTPUT, "a", encoding="utf-8") as out_f:
+            batches = [remaining[i:i + BATCH_SIZE] for i in range(0, len(remaining), BATCH_SIZE)]
+            print(f"Processing {len(batches)} batches of ~{BATCH_SIZE} entries each")
 
-    batches = [remaining[i:i + BATCH_SIZE] for i in range(0, len(remaining), BATCH_SIZE)]
-    print(f"Processing {len(batches)} batches of ~{BATCH_SIZE} entries each")
+            for batch_idx, batch in enumerate(batches):
+                print(f"\nBatch {batch_idx + 1}/{len(batches)} ({len(batch)} entries)...")
+                prompt = build_prompt(batch)
 
-    for batch_idx, batch in enumerate(batches):
-        print(f"\nBatch {batch_idx + 1}/{len(batches)} ({len(batch)} entries)...")
-        prompt = build_prompt(batch)
+                response = send_to_deepseek(prompt)
+                extracted = parse_json_response(response)
 
-        response = send_to_deepseek(prompt)
-        extracted = parse_json_response(response)
+                if extracted and isinstance(extracted, list):
+                    # Validate that we got extractions for all entries in the batch
+                    # Handle case where AI returns fewer items than batch size
+                    if len(extracted) != len(batch):
+                        print(f"  WARNING: batch size {len(batch)} but got {len(extracted)} extractions")
+                        # Only save the ones that came back; don't mark batch as complete
+                        for i, item in enumerate(extracted):
+                            out_f.write(json.dumps(item, ensure_ascii=False) + "\n")
+                        out_f.flush()
+                        print(f"  Saved {len(extracted)} extractions but NOT marking batch as complete")
+                    else:
+                        for item in extracted:
+                            out_f.write(json.dumps(item, ensure_ascii=False) + "\n")
+                        out_f.flush()
 
-        if extracted and isinstance(extracted, list):
-            for item in extracted:
-                out_f.write(json.dumps(item, ensure_ascii=False) + "\n")
-            out_f.flush()
+                        # Update progress - only mark batch as done if we got all items
+                        for e in batch:
+                            done_names.add(e["name"])
+                        PROGRESS.write_text(json.dumps({"done": list(done_names)}))
+                        print(f"  OK: got {len(extracted)} extractions")
+                else:
+                    print(f"  FAILED to parse response. Raw (first 300): {(response or '')[:300]}")
+                    print(f"  NOT marking batch as done - will retry next run")
 
-            # Update progress
-            for e in batch:
-                done_names.add(e["name"])
-            PROGRESS.write_text(json.dumps({"done": list(done_names)}))
-            print(f"  OK: got {len(extracted)} extractions")
-        else:
-            print(f"  FAILED to parse response. Raw (first 300): {(response or '')[:300]}")
-            # Still mark as done to avoid infinite retry; can re-run failed ones later
-            for e in batch:
-                done_names.add(e["name"])
-            PROGRESS.write_text(json.dumps({"done": list(done_names)}))
+                if batch_idx < len(batches) - 1:
+                    time.sleep(SLEEP_BETWEEN)
 
-        if batch_idx < len(batches) - 1:
-            time.sleep(SLEEP_BETWEEN)
-
-    out_f.close()
-    print(f"\nDone! Extracted data in {OUTPUT}")
+        print(f"\nDone! Extracted data in {OUTPUT}")
+    except Exception as e:
+        print(f"Error during processing: {e}")
+        raise
 
 
 if __name__ == "__main__":

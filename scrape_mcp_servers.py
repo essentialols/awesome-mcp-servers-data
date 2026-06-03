@@ -53,10 +53,11 @@ def parse_readme():
     # Match category headers like ### 🔗 <a name="aggregators"></a>Aggregators
     cat_pattern = re.compile(r"^###\s+.+?</a>\s*(.+)$", re.MULTILINE)
     # Match entries like - [name](url) tags - description
+    # Skip badge/image links like [![...](...)], then match actual [name](url) entry
     entry_pattern = re.compile(
-        r"^-\s+(?:\[.*?\]\(.*?\)\s+)*"  # optional badge links
-        r"\[([^\]]+)\]\(([^)]+)\)"       # name and URL
-        r"\s*(.*?)$",                     # rest of line (tags + description)
+        r"^-\s+(?:\[!\[.*?\]\(.*?\)\]\(.*?\)\s+)*"  # skip badge image links like [![...](...)][...]
+        r"\[([^\]]+)\]\(([^)]+)\)"                     # name and URL - must not contain ![
+        r"\s*(.*?)$",                                  # rest of line (tags + description)
         re.MULTILINE,
     )
 

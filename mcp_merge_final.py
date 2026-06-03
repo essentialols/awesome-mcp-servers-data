@@ -147,8 +147,11 @@ def main():
         # Clean empty keywords
         row["keywords"] = [k for k in row["keywords"] if k.strip()]
         # Normalize invalid use cases to "other"
-        if row["primary_use_case"] not in VALID_USE_CASES:
-            row["primary_use_case"] = row["primary_use_case"] or "other"
+        use_case = (row["primary_use_case"] or "").strip()
+        if use_case and use_case not in VALID_USE_CASES:
+            row["primary_use_case"] = "other"
+        elif not use_case:
+            row["primary_use_case"] = "other"
 
     # Save JSON
     OUTPUT_JSON.write_text(json.dumps(final, indent=2, ensure_ascii=False))
